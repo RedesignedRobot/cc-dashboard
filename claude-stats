@@ -10,25 +10,25 @@ set -euo pipefail
 STATS_FILE="${HOME}/.claude/stats-cache.json"
 REFRESH_INTERVAL="${CLAUDE_STATS_REFRESH:-1}"
 
-# Colors
-readonly RESET='\033[0m'
-readonly BOLD='\033[1m'
-readonly DIM='\033[2m'
+# Colors (using $'...' for escape interpretation)
+readonly RESET=$'\033[0m'
+readonly BOLD=$'\033[1m'
+readonly DIM=$'\033[2m'
 
-readonly BLACK='\033[30m'
-readonly RED='\033[31m'
-readonly GREEN='\033[32m'
-readonly YELLOW='\033[33m'
-readonly BLUE='\033[34m'
-readonly MAGENTA='\033[35m'
-readonly CYAN='\033[36m'
-readonly WHITE='\033[37m'
+readonly BLACK=$'\033[30m'
+readonly RED=$'\033[31m'
+readonly GREEN=$'\033[32m'
+readonly YELLOW=$'\033[33m'
+readonly BLUE=$'\033[34m'
+readonly MAGENTA=$'\033[35m'
+readonly CYAN=$'\033[36m'
+readonly WHITE=$'\033[37m'
 
-readonly BG_BLACK='\033[40m'
-readonly BG_BLUE='\033[44m'
-readonly BG_CYAN='\033[46m'
-readonly BG_GREEN='\033[42m'
-readonly BG_MAGENTA='\033[45m'
+readonly BG_BLACK=$'\033[40m'
+readonly BG_BLUE=$'\033[44m'
+readonly BG_CYAN=$'\033[46m'
+readonly BG_GREEN=$'\033[42m'
+readonly BG_MAGENTA=$'\033[45m'
 
 # Box drawing
 readonly BOX_TL='╔' BOX_TR='╗' BOX_BL='╚' BOX_BR='╝'
@@ -49,14 +49,14 @@ get_terminal_size() {
         ROWS=$(tput lines 2>/dev/null || echo 24)
     fi
     # Minimum width
-    [[ $COLS -lt 60 ]] && COLS=60
+    if [[ $COLS -lt 60 ]]; then COLS=60; fi
 }
 
 # Move cursor
-move_to() { printf '\033[%d;%dH' "$1" "$2"; }
-clear_screen() { printf '\033[2J\033[H'; }
-hide_cursor() { printf '\033[?25l'; }
-show_cursor() { printf '\033[?25h'; }
+move_to() { printf $'\033[%d;%dH' "$1" "$2"; }
+clear_screen() { printf $'\033[2J\033[H'; }
+hide_cursor() { printf $'\033[?25l'; }
+show_cursor() { printf $'\033[?25h'; }
 
 # Draw horizontal line
 draw_hline() {
@@ -86,9 +86,9 @@ make_bar() {
     local width=$3
     local color="${4:-$GREEN}"
 
-    [[ $max -eq 0 ]] && max=1
+    [[ $max -eq 0 ]] && max=1 || true
     local filled=$(( value * width / max ))
-    [[ $filled -gt $width ]] && filled=$width
+    [[ $filled -gt $width ]] && filled=$width || true
 
     printf "${color}"
     for ((i=0; i<filled; i++)); do printf "$BAR_FULL"; done
@@ -104,12 +104,12 @@ make_sparkline() {
     local chars=("$BAR_1" "$BAR_2" "$BAR_3" "$BAR_4" "$BAR_5" "$BAR_6" "$BAR_7" "$BAR_FULL")
 
     for v in "${values[@]}"; do
-        [[ $v -gt $max ]] && max=$v
+        [[ $v -gt $max ]] && max=$v || true
     done
 
     for v in "${values[@]}"; do
         local idx=$(( v * 7 / max ))
-        [[ $idx -gt 7 ]] && idx=7
+        [[ $idx -gt 7 ]] && idx=7 || true
         printf "${CYAN}${chars[$idx]}${RESET}"
     done
 }
@@ -167,9 +167,9 @@ parse_stats() {
     TODAY_MESSAGES=$(echo "$TODAY_STATS" | cut -d'|' -f1)
     TODAY_SESSIONS=$(echo "$TODAY_STATS" | cut -d'|' -f2)
     TODAY_TOOLS=$(echo "$TODAY_STATS" | cut -d'|' -f3)
-    [[ -z "$TODAY_MESSAGES" ]] && TODAY_MESSAGES=0
-    [[ -z "$TODAY_SESSIONS" ]] && TODAY_SESSIONS=0
-    [[ -z "$TODAY_TOOLS" ]] && TODAY_TOOLS=0
+    [[ -z "$TODAY_MESSAGES" ]] && TODAY_MESSAGES=0 || true
+    [[ -z "$TODAY_SESSIONS" ]] && TODAY_SESSIONS=0 || true
+    [[ -z "$TODAY_TOOLS" ]] && TODAY_TOOLS=0 || true
 }
 
 draw_header() {
@@ -214,7 +214,7 @@ draw_today_box() {
 
     # Today's metrics with bars
     local max_today=1000
-    [[ $TODAY_MESSAGES -gt $max_today ]] && max_today=$TODAY_MESSAGES
+    [[ $TODAY_MESSAGES -gt $max_today ]] && max_today=$TODAY_MESSAGES || true
 
     printf "  ${BOLD}Messages${RESET}  "
     make_bar $TODAY_MESSAGES $max_today 30 "$GREEN"
@@ -240,19 +240,19 @@ draw_daily_chart() {
     # Find max for scaling
     local max_msg=1
     while IFS='|' read -r date msgs sessions tools; do
-        [[ $msgs -gt $max_msg ]] && max_msg=$msgs
+        [[ $msgs -gt $max_msg ]] && max_msg=$msgs || true
     done <<< "$DAILY_DATA"
 
     # Draw bars
     while IFS='|' read -r date msgs sessions tools; do
         local short_date=$(echo "$date" | cut -d'-' -f2,3 | tr '-' '/')
         local bar_len=$((msgs * bar_width / max_msg))
-        [[ $bar_len -lt 1 ]] && bar_len=1
+        [[ $bar_len -lt 1 ]] && bar_len=1 || true
 
         # Color based on intensity
         local color="$GREEN"
-        [[ $msgs -gt $((max_msg / 2)) ]] && color="$YELLOW"
-        [[ $msgs -gt $((max_msg * 3 / 4)) ]] && color="$RED"
+        [[ $msgs -gt $((max_msg / 2)) ]] && color="$YELLOW" || true
+        [[ $msgs -gt $((max_msg * 3 / 4)) ]] && color="$RED" || true
 
         printf "  ${DIM}%s${RESET} " "$short_date"
         printf "${color}"
@@ -271,7 +271,7 @@ draw_model_usage() {
     printf "  ${DIM}$(draw_hline "$BOX_H_S" $box_width)${RESET}\n"
 
     local total=$((OPUS_OUTPUT + SONNET_OUTPUT + HAIKU_OUTPUT))
-    [[ $total -eq 0 ]] && total=1
+    [[ $total -eq 0 ]] && total=1 || true
 
     # Opus
     local opus_pct=$((OPUS_OUTPUT * 100 / total))
@@ -310,7 +310,7 @@ draw_hour_chart() {
     local max_hour=1
     while IFS=':' read -r hour count; do
         hours[$hour]=$count
-        [[ $count -gt $max_hour ]] && max_hour=$count
+        [[ $count -gt $max_hour ]] && max_hour=$count || true
     done <<< "$HOUR_COUNTS"
 
     # Draw sparkline style chart
@@ -322,9 +322,9 @@ draw_hour_chart() {
 
         # Color based on time of day
         local color="$DIM"
-        [[ $i -ge 9 && $i -lt 17 ]] && color="$YELLOW"  # Work hours
-        [[ $i -ge 17 && $i -lt 22 ]] && color="$GREEN"  # Evening
-        [[ $i -ge 22 || $i -lt 2 ]] && color="$MAGENTA" # Night
+        [[ $i -ge 9 && $i -lt 17 ]] && color="$YELLOW" || true   # Work hours
+        [[ $i -ge 17 && $i -lt 22 ]] && color="$GREEN" || true   # Evening
+        [[ $i -ge 22 || $i -lt 2 ]] && color="$MAGENTA" || true  # Night
 
         printf "${color}${chars[$height]}${RESET}"
     done
@@ -396,13 +396,15 @@ main() {
     done
 }
 
-# Handle --help
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    cat << 'EOF'
+# Handle arguments
+case "${1:-}" in
+    --help|-h)
+        cat << 'EOF'
 claude-stats - Real-time Claude Code usage dashboard
 
 USAGE:
     claude-stats              Run the live dashboard
+    claude-stats --once       Single snapshot (no refresh)
     claude-stats --help       Show this help
 
 ENVIRONMENT:
@@ -413,7 +415,22 @@ EXAMPLES:
     CLAUDE_STATS_REFRESH=5 claude-stats   # 5-second refresh
 
 EOF
-    exit 0
-fi
-
-main "$@"
+        exit 0
+        ;;
+    --once)
+        # Single shot mode - no loop, no cursor hiding
+        get_terminal_size
+        parse_stats
+        draw_header
+        draw_summary_box
+        draw_today_box
+        draw_daily_chart
+        draw_model_usage
+        draw_hour_chart
+        printf "\n"
+        exit 0
+        ;;
+    *)
+        main "$@"
+        ;;
+esac
