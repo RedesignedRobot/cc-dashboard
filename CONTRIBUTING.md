@@ -1,120 +1,111 @@
-# Contributing to Claude Stats
+# Contributing to CC Dashboard
 
-Thanks for your interest in contributing! This project is open to contributions of all kinds.
+Thanks for your interest in contributing! We welcome contributions of all kinds.
 
-## Getting Started
+## 🚀 Quick Setup
 
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/claude-scripts.git
-   cd claude-scripts
-   ```
-3. **Create a virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-4. **Install in development mode**:
-   ```bash
-   pip install -e ".[dev]"
-   ```
+```bash
+# 1. Fork and clone
+git clone https://github.com/YOUR_USERNAME/cc-dashboard.git
+cd cc-dashboard
 
-## Development
+# 2. Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-### Project Structure
+# 3. Install in dev mode
+pip install -e ".[dev]"
+
+# 4. Run the app
+ccd
+```
+
+## 📁 Project Structure
 
 ```
-claude-scripts/
-├── src/claude_stats/
-│   ├── __init__.py      # Package version
-│   ├── app.py           # Main Textual application
-│   ├── parser.py        # Stats parsing and cost calculations
+cc-dashboard/
+├── src/cc_dashboard/
+│   ├── __init__.py      # Version info
+│   ├── app.py           # Main Textual app
+│   ├── parser.py        # Stats parsing & cost calculations
 │   └── themes.py        # Theme definitions
 ├── pyproject.toml       # Package configuration
-├── requirements.txt     # Dependencies
+├── LICENSE              # MIT License
 └── README.md
 ```
 
-### Running Locally
+## 🎨 Adding Themes
 
-```bash
-# Run the app directly
-python -m claude_stats.app
+Themes are the easiest way to contribute! Edit `src/cc_dashboard/themes.py`:
 
-# Or if installed
-claude-stats
+```python
+from textual.theme import Theme
+
+MY_THEME = Theme(
+    name="stats-mytheme",
+    primary="#YOUR_COLOR",
+    secondary="#YOUR_COLOR",
+    accent="#YOUR_COLOR",
+    foreground="#YOUR_COLOR",
+    background="#YOUR_COLOR",
+    success="#YOUR_COLOR",
+    warning="#YOUR_COLOR",
+    error="#YOUR_COLOR",
+    surface="#YOUR_COLOR",
+    panel="#YOUR_COLOR",
+    dark=True,  # or False for light themes
+)
+
+# Add to THEMES dict
+THEMES["stats-mytheme"] = MY_THEME
+
+# Add display name
+THEME_DISPLAY_NAMES["stats-mytheme"] = "My Theme"
 ```
 
-### Code Style
+## 📝 Code Style
 
-- Use type hints where possible
-- Follow PEP 8 conventions
-- Keep functions focused and well-documented
+- Use type hints
+- Follow PEP 8
+- Keep functions focused
+- Add docstrings for public functions
 
-## What to Contribute
-
-### Good First Issues
-
-- Add new themes
-- Improve chart visualizations
-- Add new statistics/metrics
-- Documentation improvements
-
-### Feature Ideas
-
-- Export functionality (CSV, JSON, HTML reports)
-- Historical comparisons (week-over-week, month-over-month)
-- Custom date range filtering
-- Integration with other Claude tools
-
-### Bug Reports
+## 🐛 Bug Reports
 
 When reporting bugs, please include:
-- Your Python version (`python --version`)
-- Your terminal emulator
+- Python version (`python --version`)
+- OS and terminal emulator
 - Steps to reproduce
 - Expected vs actual behavior
-- Any error messages
+- Error messages (if any)
 
-## Pull Request Process
+## 💡 Feature Ideas
+
+Before starting on a large feature, open an issue to discuss it first. Great contributions we'd love:
+
+- **New visualizations** — Weekly trends, comparisons
+- **Export functionality** — CSV, JSON, HTML reports
+- **Date filtering** — View specific time ranges
+- **More themes** — Light themes, custom color schemes
+
+## 🔄 Pull Request Process
 
 1. Create a feature branch: `git checkout -b feature/your-feature`
 2. Make your changes
-3. Test locally: `claude-stats`
+3. Test locally with `ccd`
 4. Commit with clear messages
-5. Push and create a Pull Request
+5. Push and open a PR
 
 ### PR Guidelines
 
-- Keep PRs focused on a single change
-- Update documentation if needed
-- Add yourself to contributors if this is your first PR
+- Keep PRs focused on one change
+- Update docs if needed
+- Add yourself to contributors!
 
-## Adding Themes
-
-Themes are defined in `src/claude_stats/themes.py`. To add a new theme:
-
-1. Create a new CSS string following the existing pattern
-2. Add it to the `THEMES` dictionary
-3. Test with the `t` key to cycle through themes
-
-Example:
-```python
-MY_THEME = """
-Screen {
-    background: #your_color;
-}
-/* ... more CSS ... */
-"""
-
-THEMES["my_theme"] = MY_THEME
-```
-
-## Questions?
-
-Open an issue on GitHub or reach out to the maintainers.
-
-## License
+## 📜 License
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
+
+---
+
+Questions? Open an issue or reach out to the maintainers.

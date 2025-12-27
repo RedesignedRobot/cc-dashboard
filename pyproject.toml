@@ -3,23 +3,27 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "claude-stats"
-version = "0.2.0"
-description = "Mission Control dashboard for Claude Code usage statistics"
+name = "cc-dashboard"
+version = "1.0.0"
+description = "⚡ Mission Control for Claude Code — Beautiful real-time dashboard for your AI coding sessions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Amir" }]
-keywords = ["claude", "cli", "dashboard", "statistics", "tui"]
+keywords = ["claude", "claude-code", "anthropic", "dashboard", "statistics", "tui", "terminal", "ai", "llm"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Utilities",
 ]
 dependencies = [
     "textual>=0.89.0",
@@ -28,14 +32,23 @@ dependencies = [
     "humanize>=4.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
 [project.scripts]
-claude-stats = "claude_stats.app:main"
+ccd = "cc_dashboard.app:main"
 
 [project.urls]
-Repository = "https://github.com/RedesignedRobot/claude-scripts"
+Homepage = "https://github.com/RedesignedRobot/cc-dashboard"
+Repository = "https://github.com/RedesignedRobot/cc-dashboard"
+Issues = "https://github.com/RedesignedRobot/cc-dashboard/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/claude_stats"]
+packages = ["src/cc_dashboard"]
 
 [tool.hatch.build.targets.sdist]
 include = ["/src"]

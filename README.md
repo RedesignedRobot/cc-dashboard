@@ -1,164 +1,122 @@
-# Claude Stats
+<div align="center">
+
+# ⚡ CC Dashboard
+
+### Mission Control for Claude Code
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI](https://img.shields.io/badge/PyPI-cc--dashboard-blue)](https://pypi.org/project/cc-dashboard/)
 
-**Mission Control Dashboard** for [Claude Code](https://claude.ai/claude-code) usage statistics.
+**A beautiful, real-time terminal dashboard for your Claude Code sessions.**
 
-A beautiful, real-time terminal dashboard that shows you everything about your Claude Code usage - messages, costs, tokens, trends, and more.
+Track your AI coding costs, token usage, and productivity — all in one gorgeous TUI.
 
-![Dashboard Preview](https://via.placeholder.com/800x400?text=Claude+Stats+Dashboard)
+[Installation](#-quick-start) • [Features](#-features) • [Themes](#-themes) • [Contributing](#-contributing)
 
-## Features
+---
 
-- 📊 **Live Dashboard** - Auto-refreshing TUI with charts and graphs
-- 💰 **Cost Tracking** - Real USD cost calculations using Anthropic pricing
-- 🎯 **Token Analytics** - Input, output, cache read/write breakdowns
-- 📈 **Visual Charts** - Daily message trends, token usage, hourly patterns
-- 🎨 **Themes** - Multiple themes including pitch-black for OLED terminals
-- 💾 **Cache Insights** - See how much you're saving with prompt caching
+</div>
 
-## Installation
-
-### Using pipx (Recommended)
+## 🚀 Quick Start
 
 ```bash
-pipx install git+https://github.com/RedesignedRobot/claude-scripts.git
+# Install with pipx (recommended)
+pipx install cc-dashboard
+
+# Or with pip
+pip install cc-dashboard
+
+# Launch the dashboard
+ccd
 ```
 
-### Using pip
+That's it. One command, instant insights.
 
-```bash
-pip install git+https://github.com/RedesignedRobot/claude-scripts.git
-```
+## ✨ Features
 
-### From Source
+| Feature | Description |
+|---------|-------------|
+| 💰 **Cost Tracking** | Real USD costs using Anthropic's actual pricing |
+| 📊 **Live Charts** | Daily messages, tokens, hourly patterns, model breakdown |
+| 🎨 **4 Themes** | Dark, Midnight, Matrix, Dracula — press `t` to switch |
+| 💾 **Cache Insights** | See how much you're saving with prompt caching |
+| 🔄 **Auto-refresh** | Updates every 5 seconds, or press `r` to refresh |
+| ⚡ **Instant Launch** | Opens in under a second |
 
-```bash
-git clone https://github.com/RedesignedRobot/claude-scripts.git
-cd claude-scripts
-pip install -e .
-```
-
-### Requirements
-
-- Python 3.10 or higher
-- Claude Code installed with usage history (`~/.claude/stats-cache.json`)
-- Terminal with Unicode support
-
-## Usage
-
-Simply run:
-
-```bash
-claude-stats
-```
-
-The dashboard launches and auto-refreshes every 5 seconds.
-
-### Keyboard Shortcuts
+## ⌨️ Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
 | `t` | Cycle through themes |
-| `r` | Force refresh data |
+| `r` | Force refresh |
 | `q` | Quit |
 
-### Themes
+## 🎨 Themes
 
-Press `t` to cycle through available themes:
+Press `t` to cycle through themes in real-time:
 
-- **dark** - Pitch black background (perfect for OLED)
-- **midnight** - Deep blue tones (GitHub-inspired)
-- **matrix** - Green on black
-- **dracula** - Purple tones
+- **Dark** — Pitch black OLED-friendly
+- **Midnight** — Deep blue, GitHub-inspired
+- **Matrix** — Classic green on black
+- **Dracula** — Purple hacker vibes
 
-## What You'll See
-
-### Summary Bar
-Key metrics at a glance: messages, tools, cost, tokens, cache savings, active days.
-
-### Panels
-- **Cost & Tokens** - Total cost, daily average, per-model breakdown, cache savings
-- **Activity** - Latest day stats, peak day, longest session, usage trend
-
-### Charts
-- **Daily Messages** - Bar chart of message volume (21 days)
-- **Daily Tokens** - Token usage trend
-- **Cost by Model** - Which models are costing the most
-- **Hourly Activity** - When you code most often
-
-## Cost Calculations
+## 💰 Cost Calculations
 
 Uses current Anthropic API pricing (December 2025):
 
-| Model | Input (per 1M) | Output (per 1M) |
-|-------|----------------|-----------------|
-| Opus 4.5 | $5.00 | $25.00 |
-| Opus 4.1 | $15.00 | $75.00 |
-| Sonnet 4.5 | $3.00 | $15.00 |
-| Haiku 4.5 | $0.80 | $4.00 |
+| Model | Input | Output |
+|-------|-------|--------|
+| Claude Opus 4.5 | $5.00/M | $25.00/M |
+| Claude Opus 4.1 | $15.00/M | $75.00/M |
+| Claude Sonnet 4.5 | $3.00/M | $15.00/M |
+| Claude Haiku 4.5 | $0.80/M | $4.00/M |
 
-Cache pricing:
-- Cache reads: 10% of input price
-- Cache writes: 125% of input price
+Cache reads are 10% of input price. Cache writes are 125% of input price.
 
-## Configuration
+## 📋 Requirements
 
-### Custom Stats File
+- **Python 3.10+**
+- **Claude Code** installed with usage data (`~/.claude/stats-cache.json`)
+- A terminal with Unicode support
+
+Don't have Claude Code? Get it at [claude.ai/claude-code](https://claude.ai/claude-code)
+
+## 🛠️ Development
 
 ```bash
-claude-stats /path/to/stats-cache.json
+# Clone the repo
+git clone https://github.com/RedesignedRobot/cc-dashboard.git
+cd cc-dashboard
+
+# Install in dev mode
+pip install -e ".[dev]"
+
+# Run locally
+ccd
 ```
 
-### Environment
-
-The app reads from `~/.claude/stats-cache.json` by default. This file is created and maintained by Claude Code.
-
-## Customization
-
-### Adding Themes
-
-Create your own themes in `src/claude_stats/themes.py`:
-
-```python
-MY_THEME = """
-Screen {
-    background: #your_color;
-}
-/* ... Textual CSS ... */
-"""
-
-THEMES["my_theme"] = MY_THEME
-THEME_NAMES.append("my_theme")
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
-
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-Ideas for contributions:
+**Ideas we'd love:**
 - New themes
 - Additional charts/visualizations
-- Export functionality (CSV, HTML reports)
+- Export to CSV/HTML
 - Date range filtering
 - Week-over-week comparisons
 
-## Dependencies
+## 📜 License
 
-- [Textual](https://textual.textualize.io/) - TUI framework
-- [textual-plotext](https://github.com/Textualize/textual-plotext/) - Terminal charts
-- [Rich](https://rich.readthedocs.io/) - Rich text formatting
-- [humanize](https://python-humanize.readthedocs.io/) - Human-readable formatting
+MIT License — see [LICENSE](LICENSE) for details.
 
-## License
+---
 
-MIT License - see [LICENSE](LICENSE) for details.
+<div align="center">
 
-## Acknowledgments
+**Built with ❤️ for the Claude Code community**
 
-- Built for users of [Claude Code](https://claude.ai/claude-code)
-- Powered by [Anthropic's Claude](https://www.anthropic.com/)
-- TUI framework by [Textualize](https://www.textualize.io/)
+[Textual](https://textual.textualize.io/) • [Rich](https://rich.readthedocs.io/) • [Plotext](https://github.com/piccolomo/plotext)
+
+</div>

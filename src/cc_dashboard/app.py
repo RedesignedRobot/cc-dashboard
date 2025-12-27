@@ -1,10 +1,13 @@
-"""Claude Stats Mission Control - A beautiful terminal dashboard."""
+"""CC Dashboard - Mission Control for Claude Code."""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from datetime import datetime
 from pathlib import Path
 
+from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
@@ -12,8 +15,11 @@ from textual.reactive import reactive
 from textual.widgets import Footer, Static
 from textual_plotext import PlotextPlot
 
+from . import __version__
 from .parser import ClaudeStats
-from .themes import THEMES, THEME_NAMES, THEME_DISPLAY_NAMES, get_next_theme
+from .themes import THEMES, THEME_DISPLAY_NAMES, get_next_theme
+
+console = Console()
 
 
 def format_tokens(n: int) -> str:
@@ -52,7 +58,7 @@ class HeaderWidget(Static):
         now = datetime.now().strftime("%H:%M:%S")
         content = self.query_one("#header-content", Static)
         content.update(
-            f"[bold]⚡ CLAUDE CODE MISSION CONTROL[/]  [dim]│[/]  [bold]{now}[/]"
+            f"[bold]⚡ CC DASHBOARD[/]  [dim]│[/]  [bold]{now}[/]"
         )
 
 
@@ -149,7 +155,6 @@ class ActivityPanel(Static):
         # Time of day
         lines.append("")
         tod = stats.activity_by_time_of_day
-        total = sum(tod.values()) or 1
         peak_time = max(tod.keys(), key=lambda k: tod[k])
         lines.append(f"[bold]Most active:[/] {peak_time.title()}")
 
@@ -232,8 +237,8 @@ class HourlyChart(PlotextPlot):
         self.refresh()
 
 
-class ClaudeStatsApp(App):
-    """Claude Stats Mission Control Dashboard."""
+class CCDashboardApp(App):
+    """CC Dashboard - Mission Control for Claude Code."""
 
     CSS = """
     Screen {
@@ -313,8 +318,8 @@ class ClaudeStatsApp(App):
         Binding("t", "toggle_theme", "Theme"),
     ]
 
-    TITLE = "Claude Stats"
-    SUB_TITLE = "Mission Control"
+    TITLE = "CC Dashboard"
+    SUB_TITLE = "Mission Control for Claude Code"
 
     stats: reactive[ClaudeStats | None] = reactive(None)
 
@@ -361,9 +366,9 @@ class ClaudeStatsApp(App):
         try:
             self.stats = ClaudeStats.from_file(self.stats_file)
         except FileNotFoundError:
-            self.notify("Stats file not found", severity="error")
+            self.notify("Stats file not found. Use Claude Code first!", severity="error")
         except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+            self.notify(f"Error loading stats: {e}", severity="error")
 
     def watch_stats(self, stats: ClaudeStats | None) -> None:
         if stats is None:
@@ -389,15 +394,61 @@ class ClaudeStatsApp(App):
         self.notify(f"Theme: {display_name}", timeout=1)
 
 
+def print_welcome():
+    """Print welcome banner."""
+    console.print()
+    console.print("[bold cyan]⚡ CC Dashboard[/] [dim]v{version}[/]".format(version=__version__))
+    console.print("[dim]Mission Control for Claude Code[/]")
+    console.print()
+
+
+def check_stats_file(path: Path | None) -> Path:
+    """Check if stats file exists and return the path."""
+    if path is None:
+        path = Path.home() / ".claude" / "stats-cache.json"
+
+    if not path.exists():
+        console.print("[bold red]Error:[/] Stats file not found!")
+        console.print()
+        console.print(f"[dim]Expected location:[/] {path}")
+        console.print()
+        console.print("[yellow]To fix this:[/]")
+        console.print("  1. Install Claude Code: [cyan]https://claude.ai/claude-code[/]")
+        console.print("  2. Use Claude Code for a bit to generate usage data")
+        console.print("  3. Run [bold]ccd[/] again")
+        console.print()
+        sys.exit(1)
+
+    return path
+
+
 def main() -> None:
-    """Entry point."""
-    import sys
+    """Entry point for CC Dashboard."""
+    parser = argparse.ArgumentParser(
+        prog="ccd",
+        description="⚡ CC Dashboard - Mission Control for Claude Code",
+        epilog="Press 't' to change themes, 'r' to refresh, 'q' to quit.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "stats_file",
+        nargs="?",
+        type=Path,
+        help="Path to stats-cache.json (default: ~/.claude/stats-cache.json)",
+    )
+    parser.add_argument(
+        "-v", "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
 
-    stats_file = None
-    if len(sys.argv) > 1:
-        stats_file = Path(sys.argv[1])
+    args = parser.parse_args()
 
-    app = ClaudeStatsApp(stats_file=stats_file)
+    # Check stats file exists
+    stats_file = check_stats_file(args.stats_file)
+
+    # Launch the dashboard
+    app = CCDashboardApp(stats_file=stats_file)
     app.run()
 
 
