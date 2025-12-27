@@ -1,90 +1,80 @@
 # Claude Stats
 
-Real-time terminal dashboard for Claude Code usage statistics.
+**Mission Control Dashboard** for Claude Code usage statistics.
 
-![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)
-![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
+A beautiful, real-time terminal dashboard that shows you everything about your Claude Code usage - messages, costs, tokens, trends, and more.
 
 ## Features
 
-- **Live Dashboard** - Auto-refreshing terminal UI with colorized stats
-- **Multiple Views** - Summary, models, activity, hourly distribution
-- **Export** - Export data to JSON or CSV
-- **Subcommands** - Focused views for specific metrics
+- **Live Dashboard** - Auto-refreshing TUI with charts and graphs
+- **Cost Tracking** - Real USD cost calculations using Anthropic pricing
+- **Token Analytics** - Input, output, cache read/write breakdowns
+- **Visual Charts** - Daily message trends, token usage, model distribution
+- **Activity Insights** - Hourly patterns, peak usage, session analysis
+- **Cache Savings** - See how much you're saving with prompt caching
 
 ## Installation
 
 ```bash
-# Install from source
-pip install -e .
-
-# Or with pipx for isolated install
+# Using pipx (recommended)
 pipx install .
+
+# Or using pip
+pip install .
 ```
 
 ## Usage
 
-### Live Dashboard
+Just run:
 
 ```bash
-# Quick view (single render)
 claude-stats
-
-# Live auto-refresh mode
-claude-stats --watch
-claude-stats -w
-
-# Custom refresh rate (default: 1 second)
-claude-stats -w --refresh 2
 ```
 
-### Subcommands
+That's it! The dashboard will launch and auto-refresh every 5 seconds.
 
-```bash
-# Compact summary table
-claude-stats summary
+### Keyboard Shortcuts
 
-# Model usage breakdown
-claude-stats models
+- `r` - Force refresh
+- `q` - Quit
 
-# Daily activity (default: 14 days)
-claude-stats activity
-claude-stats activity --days 30
+## What You'll See
 
-# Today's stats only
-claude-stats today
+### Summary Bar
+- Total messages, sessions, tool calls
+- Total cost in USD
+- Total tokens processed
+- Cache savings
 
-# Hourly distribution
-claude-stats hours
+### Panels
+- **Cost Breakdown** - Total cost, daily average, cost by model, cache savings
+- **Token Usage** - Input/output tokens, cache stats, per-model breakdown
+- **Activity** - Today's stats (or latest day), peak day, usage trend
+- **Sessions** - Total sessions, longest session, active days
+- **Hourly Activity** - When you code most, time-of-day distribution
 
-# Export data
-claude-stats export data.json --days 30
-claude-stats export data.csv --days 7
-```
+### Charts
+- **Daily Messages** - Bar chart of last 21 days
+- **Daily Tokens** - Token usage trend
+- **Model Distribution** - Output tokens by model
 
-### Options
+## Pricing
 
-```
---watch, -w       Live dashboard with auto-refresh
---refresh, -r     Refresh interval in seconds (default: 1.0)
---file, -f        Custom path to stats-cache.json
-```
+Cost calculations use current Anthropic pricing (December 2025):
 
-## What It Shows
+| Model | Input (per 1M) | Output (per 1M) |
+|-------|----------------|-----------------|
+| Opus 4.5 | $5.00 | $25.00 |
+| Sonnet 4.5 | $3.00 | $15.00 |
+| Haiku 4.5 | $0.80 | $4.00 |
 
-- **Sessions** - Total coding sessions with Claude
-- **Messages** - Total message exchanges
-- **Tool Calls** - How often Claude used tools (file edits, commands, etc.)
-- **Model Usage** - Breakdown by model (Opus, Sonnet, Haiku) with token counts
-- **Activity Charts** - Daily message volume with color-coded intensity
-- **Hour Distribution** - When you're most active during the day
-- **Peak Day** - Your most productive day
-- **Longest Session** - Duration and message count
+Cache reads are 10% of input price. Cache writes are 125% of input price.
 
 ## Requirements
 
 - Python 3.10+
-- Claude Code installed (`~/.claude/stats-cache.json` must exist)
+- Claude Code installed with usage history (`~/.claude/stats-cache.json`)
+- Terminal with Unicode support (most modern terminals)
 
 ## License
 
