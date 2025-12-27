@@ -10,6 +10,27 @@ from typing import Any
 from enum import Enum
 
 
+class TimeRange(Enum):
+    """Time ranges for filtering statistics."""
+    TODAY = ("today", "Today", 1)
+    WEEK = ("week", "This Week", 7)
+    MONTH = ("month", "This Month", 30)
+    QUARTER = ("quarter", "Last 3 Months", 90)
+    ALL_TIME = ("all", "All Time", 365)
+
+    def __init__(self, key: str, display: str, days: int):
+        self.key = key
+        self.display = display
+        self.days = days
+
+    @classmethod
+    def next(cls, current: "TimeRange") -> "TimeRange":
+        """Get the next time range in the cycle."""
+        members = list(cls)
+        idx = members.index(current)
+        return members[(idx + 1) % len(members)]
+
+
 class Model(Enum):
     """Claude models with pricing info (per million tokens, December 2025)."""
     # Format: (input_price, output_price, cache_write_multiplier, cache_read_multiplier)
@@ -236,6 +257,18 @@ class ClaudeStats:
                 savings += (full_cost - cache_cost)
         return savings
 
+    @property
+    def cost_without_cache(self) -> float:
+        """Hypothetical cost if no caching was used (full input price for all tokens)."""
+        return self.total_cost + self.cache_savings
+
+    @property
+    def avg_cost_per_session_no_cache(self) -> float:
+        """Average cost per session without cache discount."""
+        if not self.total_sessions:
+            return 0
+        return self.cost_without_cache / self.total_sessions
+
     # ===== Daily/Activity Statistics =====
 
     @property
@@ -292,6 +325,197 @@ class ClaudeStats:
         if not self.active_days:
             return 0
         return self.total_cost / self.active_days
+
+    @property
+    def avg_tokens_per_message(self) -> float:
+        """Average tokens used per message."""
+        if not self.total_messages:
+            return 0
+        return self.total_tokens / self.total_messages
+
+    @property
+    def avg_tokens_per_session(self) -> float:
+        """Average tokens used per session."""
+        if not self.total_sessions:
+            return 0
+        return self.total_tokens / self.total_sessions
+
+    @property
+    def avg_messages_per_session(self) -> float:
+        """Average messages per session."""
+        if not self.total_sessions:
+            return 0
+        return self.total_messages / self.total_sessions
+
+    @property
+    def avg_cost_per_session(self) -> float:
+        """Average cost per session."""
+        if not self.total_sessions:
+            return 0
+        return self.total_cost / self.total_sessions
+
+    @property
+    def avg_tools_per_session(self) -> float:
+        """Average tool calls per session."""
+        if not self.total_sessions:
+            return 0
+        return self.total_tool_calls / self.total_sessions
+
+    @property
+    def input_output_ratio(self) -> float:
+        """Ratio of input to output tokens."""
+        if not self.total_output_tokens:
+            return 0
+        return self.total_input_tokens / self.total_output_tokens
+
+    @property
+    def cache_efficiency(self) -> float:
+        """How much of potential cache was utilized (0-100%)."""
+        total_cacheable = self.total_input_tokens + self.total_cache_read_tokens
+        if not total_cacheable:
+            return 0
+        return (self.total_cache_read_tokens / total_cacheable) * 100
+
+    @property
+    def cost_saved_percentage(self) -> float:
+        """Percentage of potential cost saved through caching."""
+        potential_cost = self.total_cost + self.cache_savings
+        if not potential_cost:
+            return 0
+        return (self.cache_savings / potential_cost) * 100
+
+    @property
+    def longest_streak(self) -> int:
+        """Longest consecutive days streak."""
+        if not self.daily_activity:
+            return 0
+
+        streak = 1
+        max_streak = 1
+        sorted_days = sorted(self.daily_activity, key=lambda x: x.date)
+
+        for i in range(1, len(sorted_days)):
+            if (sorted_days[i].date - sorted_days[i-1].date).days == 1:
+                streak += 1
+                max_streak = max(max_streak, streak)
+            else:
+                streak = 1
+
+        return max_streak
+
+    @property
+    def current_streak(self) -> int:
+        """Current consecutive days streak (ending today or yesterday)."""
+        if not self.daily_activity:
+            return 0
+
+        sorted_days = sorted(self.daily_activity, key=lambda x: x.date, reverse=True)
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+
+        # Check if most recent is today or yesterday
+        if sorted_days[0].date not in (today, yesterday):
+            return 0
+
+        streak = 1
+        for i in range(1, len(sorted_days)):
+            if (sorted_days[i-1].date - sorted_days[i].date).days == 1:
+                streak += 1
+            else:
+                break
+
+        return streak
+
+    @property
+    def busiest_day_of_week(self) -> str:
+        """Day of week with most activity."""
+        if not self.daily_activity:
+            return "N/A"
+
+        day_counts: dict[int, int] = {}
+        for d in self.daily_activity:
+            weekday = d.date.weekday()
+            day_counts[weekday] = day_counts.get(weekday, 0) + d.messages
+
+        if not day_counts:
+            return "N/A"
+
+        busiest = max(day_counts.keys(), key=lambda k: day_counts[k])
+        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        return days[busiest]
+
+    @property
+    def weekend_vs_weekday_ratio(self) -> float:
+        """Ratio of weekend to weekday activity."""
+        if not self.daily_activity:
+            return 0
+
+        weekend = sum(d.messages for d in self.daily_activity if d.date.weekday() >= 5)
+        weekday = sum(d.messages for d in self.daily_activity if d.date.weekday() < 5)
+
+        if not weekday:
+            return 0
+        return weekend / weekday
+
+    @property
+    def model_switching_frequency(self) -> float:
+        """Percentage of days with multi-model usage."""
+        if not self.daily_activity:
+            return 0
+
+        multi_model_days = sum(1 for d in self.daily_activity if len(d.tokens_by_model) > 1)
+        return (multi_model_days / len(self.daily_activity)) * 100
+
+    @property
+    def tokens_by_type(self) -> dict[str, int]:
+        """Token breakdown by type for visualization."""
+        return {
+            "Input": self.total_input_tokens,
+            "Output": self.total_output_tokens,
+            "Cache Read": self.total_cache_read_tokens,
+            "Cache Write": self.total_cache_write_tokens,
+        }
+
+    @property
+    def week_over_week_change(self) -> float:
+        """Percentage change in messages this week vs last week."""
+        if len(self.daily_activity) < 14:
+            return 0
+
+        this_week = sum(d.messages for d in self.daily_activity[-7:])
+        last_week = sum(d.messages for d in self.daily_activity[-14:-7])
+
+        if not last_week:
+            return 0
+        return ((this_week - last_week) / last_week) * 100
+
+    @property
+    def productivity_score(self) -> int:
+        """A composite productivity score 0-100 based on various metrics."""
+        # Weighted score based on:
+        # - Active days consistency
+        # - Cache efficiency
+        # - Messages per session
+        # - Current streak
+
+        score = 0
+
+        # Active days ratio (max 30 points)
+        if self.days_since_start > 0:
+            active_ratio = min(self.active_days / self.days_since_start, 1.0)
+            score += int(active_ratio * 30)
+
+        # Cache efficiency (max 25 points)
+        score += int(min(self.cache_efficiency, 100) / 4)
+
+        # Messages per session efficiency (max 25 points) - optimal ~50 msgs/session
+        mps = min(self.avg_messages_per_session / 50, 1.0)
+        score += int(mps * 25)
+
+        # Current streak bonus (max 20 points)
+        score += min(self.current_streak * 2, 20)
+
+        return min(score, 100)
 
     @property
     def usage_trend(self) -> str:
@@ -368,9 +592,236 @@ class ClaudeStats:
         counts = [self.hour_counts.get(h, 0) for h in hours]
         return hours, counts
 
+    def get_hourly_messages(self) -> tuple[list[str], list[int]]:
+        """Get hourly message distribution for Today view (24 data points)."""
+        hours = [f"{h:02d}:00" for h in range(24)]
+        total_sessions = sum(self.hour_counts.values()) or 1
+
+        # Use today's data if available, otherwise use most recent day
+        activity = self.today_activity or self.latest_activity
+        today_msgs = activity.messages if activity else 0
+
+        # Distribute messages proportionally by session distribution
+        counts = []
+        for h in range(24):
+            session_ratio = self.hour_counts.get(h, 0) / total_sessions
+            counts.append(int(today_msgs * session_ratio))
+        return hours, counts
+
+    def get_hourly_tokens(self) -> tuple[list[str], list[int]]:
+        """Get hourly token distribution for Today view (24 data points)."""
+        hours = [f"{h:02d}:00" for h in range(24)]
+        total_sessions = sum(self.hour_counts.values()) or 1
+
+        # Use today's data if available, otherwise use most recent day
+        activity = self.today_activity or self.latest_activity
+        today_tokens = activity.total_tokens if activity else 0
+
+        # Distribute tokens proportionally by session distribution
+        counts = []
+        for h in range(24):
+            session_ratio = self.hour_counts.get(h, 0) / total_sessions
+            counts.append(int(today_tokens * session_ratio))
+        return hours, counts
+
+    def get_hourly_tools(self) -> tuple[list[str], list[int]]:
+        """Get hourly tool calls distribution for Today view (24 data points)."""
+        hours = [f"{h:02d}:00" for h in range(24)]
+        total_sessions = sum(self.hour_counts.values()) or 1
+
+        # Use today's data if available, otherwise use most recent day
+        activity = self.today_activity or self.latest_activity
+        today_tools = activity.tool_calls if activity else 0
+
+        # Distribute tool calls proportionally by session distribution
+        counts = []
+        for h in range(24):
+            session_ratio = self.hour_counts.get(h, 0) / total_sessions
+            counts.append(int(today_tools * session_ratio))
+        return hours, counts
+
+    def get_hourly_cost(self) -> tuple[list[str], list[float]]:
+        """Get hourly cost distribution for Today view (24 data points)."""
+        hours = [f"{h:02d}:00" for h in range(24)]
+        total_sessions = sum(self.hour_counts.values()) or 1
+
+        # Estimate today's cost from total
+        if self.active_days > 0:
+            today_cost = self.total_cost / self.active_days
+        else:
+            today_cost = 0.0
+
+        costs: list[float] = []
+        cumulative = 0.0
+        for h in range(24):
+            session_ratio = self.hour_counts.get(h, 0) / total_sessions
+            cumulative += today_cost * session_ratio
+            costs.append(cumulative)
+        return hours, costs
+
+    def get_hourly_sessions(self) -> tuple[list[str], list[int]]:
+        """Get hourly session counts for Today view (24 data points)."""
+        hours = [f"{h:02d}:00" for h in range(24)]
+        total_sessions = sum(self.hour_counts.values()) or 1
+
+        # Use today's data if available, otherwise use most recent day
+        activity = self.today_activity or self.latest_activity
+        today_sessions = activity.sessions if activity else 0
+
+        # Scale hourly pattern to today's session count
+        counts = []
+        for h in range(24):
+            session_ratio = self.hour_counts.get(h, 0) / total_sessions
+            counts.append(int(today_sessions * session_ratio))
+        return hours, counts
+
     def get_model_distribution(self) -> dict[str, int]:
         """Get token distribution by model for pie chart."""
         return {m.display_name: m.output_tokens for m in self.model_usage.values()}
+
+    def get_tools_series(self, days: int = 30) -> tuple[list[str], list[int]]:
+        """Get date labels and tool call counts for charting."""
+        recent = self.get_recent_activity(days)
+        dates = [d.date.strftime("%m/%d") for d in recent]
+        tools = [d.tool_calls for d in recent]
+        return dates, tools
+
+    def get_day_of_week_distribution(self) -> tuple[list[str], list[int]]:
+        """Get activity distribution by day of week."""
+        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        counts = [0] * 7
+        for d in self.daily_activity:
+            counts[d.date.weekday()] += d.messages
+        return days, counts
+
+    def get_session_duration_distribution(self) -> list[float]:
+        """Get estimated session durations for histogram."""
+        # Estimate based on messages per session ratio
+        if not self.total_sessions or not self.longest_session:
+            return []
+
+        avg_duration = self.longest_session.duration_ms / 2  # rough estimate
+        # Generate estimated durations
+        durations = []
+        for activity in self.daily_activity[-30:]:
+            if activity.sessions > 0:
+                est_duration = (activity.messages / self.avg_messages_per_session) * avg_duration
+                for _ in range(activity.sessions):
+                    durations.append(est_duration / 60000)  # convert to minutes
+        return durations
+
+    def get_cost_series(self, days: int = 21) -> tuple[list[str], list[float]]:
+        """Get daily cost estimates for charting."""
+        recent = self.get_recent_activity(days)
+        dates = [d.date.strftime("%m/%d") for d in recent]
+        # Estimate daily cost based on token distribution
+        total_tokens = sum(d.total_tokens for d in recent)
+        costs = []
+        for d in recent:
+            if total_tokens > 0:
+                ratio = d.total_tokens / total_tokens if total_tokens else 0
+                costs.append(self.total_cost * ratio * (len(recent) / self.active_days))
+            else:
+                costs.append(0)
+        return dates, costs
+
+    def get_hourly_heatmap_data(self) -> list[list[int]]:
+        """Get 7x24 heatmap data for day-of-week vs hour activity."""
+        # Initialize 7 days x 24 hours matrix
+        heatmap = [[0] * 24 for _ in range(7)]
+
+        # We only have aggregate hour data, so distribute it
+        for hour, count in self.hour_counts.items():
+            # Distribute evenly across days of week
+            per_day = count // 7
+            for day in range(7):
+                heatmap[day][hour] = per_day
+
+        return heatmap
+
+    def get_cumulative_cost(self, days: int = 30) -> tuple[list[str], list[float]]:
+        """Get cumulative cost over time."""
+        dates, daily_costs = self.get_cost_series(days)
+        cumulative: list[float] = []
+        total = 0.0
+        for cost in daily_costs:
+            total += cost
+            cumulative.append(total)
+        return dates, cumulative
+
+    def get_efficiency_metrics(self) -> dict[str, float]:
+        """Get efficiency-related metrics for display."""
+        return {
+            "tokens_per_msg": self.avg_tokens_per_message,
+            "msgs_per_session": self.avg_messages_per_session,
+            "cost_per_session": self.avg_cost_per_session,
+            "tools_per_session": self.avg_tools_per_session,
+            "cache_hit_rate": self.cache_hit_rate,
+            "cost_saved_pct": self.cost_saved_percentage,
+        }
+
+    def get_streak_data(self) -> dict[str, int]:
+        """Get streak-related statistics."""
+        return {
+            "current": self.current_streak,
+            "longest": self.longest_streak,
+            "active_days": self.active_days,
+            "total_days": self.days_since_start,
+        }
+
+    def get_comparison_data(self) -> dict[str, Any]:
+        """Get comparison statistics."""
+        return {
+            "wow_change": self.week_over_week_change,
+            "trend": self.usage_trend,
+            "productivity": self.productivity_score,
+        }
+
+    # ===== Filtering Methods =====
+
+    def filter_by_range(self, time_range: TimeRange) -> "ClaudeStats":
+        """Create a new ClaudeStats filtered to the specified time range."""
+        cutoff = date.today() - timedelta(days=time_range.days)
+
+        # Filter daily activity
+        filtered_activity = [d for d in self.daily_activity if d.date >= cutoff]
+
+        # Calculate filtered totals
+        filtered_messages = sum(d.messages for d in filtered_activity)
+        filtered_sessions = sum(d.sessions for d in filtered_activity)
+
+        # For model usage, we need to estimate based on the time proportion
+        # Since we don't have per-day model breakdown, we'll scale proportionally
+        if self.active_days > 0:
+            ratio = len(filtered_activity) / self.active_days
+        else:
+            ratio = 0
+
+        filtered_model_usage = {}
+        for model_id, usage in self.model_usage.items():
+            filtered_model_usage[model_id] = ModelUsage(
+                model_id=model_id,
+                input_tokens=int(usage.input_tokens * ratio),
+                output_tokens=int(usage.output_tokens * ratio),
+                cache_read_tokens=int(usage.cache_read_tokens * ratio),
+                cache_creation_tokens=int(usage.cache_creation_tokens * ratio),
+            )
+
+        # Keep hour counts unscaled - they represent the session pattern,
+        # not absolute counts. Used by hourly distribution methods.
+        filtered_hours = self.hour_counts.copy()
+
+        return ClaudeStats(
+            total_sessions=filtered_sessions,
+            total_messages=filtered_messages,
+            first_session_date=self.first_session_date,
+            last_computed_date=self.last_computed_date,
+            daily_activity=filtered_activity,
+            model_usage=filtered_model_usage,
+            longest_session=self.longest_session,
+            hour_counts=filtered_hours,
+            raw_data=self.raw_data,
+        )
 
     # ===== Loading Methods =====
 
