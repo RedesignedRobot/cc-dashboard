@@ -5,27 +5,15 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-import humanize
-from rich.text import Text
-from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical, Grid
+from textual.containers import Container, Horizontal
 from textual.reactive import reactive
-from textual.widgets import (
-    Footer,
-    Header,
-    Static,
-    Label,
-    Digits,
-    Sparkline,
-    ProgressBar,
-    RichLog,
-    Rule,
-)
+from textual.widgets import Footer, Static
 from textual_plotext import PlotextPlot
 
 from .parser import ClaudeStats
+from .themes import THEMES, THEME_NAMES, THEME_DISPLAY_NAMES, get_next_theme
 
 
 def format_tokens(n: int) -> str:
@@ -50,334 +38,8 @@ def format_cost(n: float) -> str:
     return f"${n:.3f}"
 
 
-class BigStat(Static):
-    """A big statistic display with label and value."""
-
-    def __init__(
-        self,
-        label: str,
-        value: str = "0",
-        sublabel: str = "",
-        color: str = "green",
-        **kwargs,
-    ) -> None:
-        super().__init__(**kwargs)
-        self.stat_label = label
-        self.stat_value = value
-        self.stat_sublabel = sublabel
-        self.stat_color = color
-
-    def compose(self) -> ComposeResult:
-        yield Static(self.stat_label, classes="stat-label")
-        yield Static(self.stat_value, classes=f"stat-value {self.stat_color}")
-        if self.stat_sublabel:
-            yield Static(self.stat_sublabel, classes="stat-sublabel")
-
-    def update_value(self, value: str, sublabel: str = "") -> None:
-        self.stat_value = value
-        self.stat_sublabel = sublabel
-        value_widget = self.query_one(".stat-value", Static)
-        value_widget.update(value)
-        if sublabel:
-            sublabel_widget = self.query_one(".stat-sublabel", Static)
-            sublabel_widget.update(sublabel)
-
-
-class CostPanel(Static):
-    """Panel showing cost breakdown."""
-
-    def __init__(self, stats: ClaudeStats | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.stats = stats
-
-    def compose(self) -> ComposeResult:
-        yield Static("💰 COST BREAKDOWN", classes="panel-title")
-        yield Static(id="cost-content")
-
-    def update_stats(self, stats: ClaudeStats) -> None:
-        self.stats = stats
-        content = self.query_one("#cost-content", Static)
-
-        lines = []
-        lines.append(f"[bold green]Total Cost:[/] {format_cost(stats.total_cost)}")
-        lines.append(f"[dim]Avg/Day:[/] {format_cost(stats.avg_cost_per_day)}")
-        lines.append("")
-
-        # Cost by model
-        for model_name, cost in sorted(stats.cost_by_model.items(), key=lambda x: -x[1]):
-            if cost > 0.001:
-                pct = (cost / stats.total_cost * 100) if stats.total_cost > 0 else 0
-                lines.append(f"  {model_name}: {format_cost(cost)} ({pct:.0f}%)")
-
-        lines.append("")
-        lines.append(f"[bold cyan]Cache Savings:[/] {format_cost(stats.cache_savings)}")
-        lines.append(f"[dim]Cache Hit Rate:[/] {stats.cache_hit_rate:.1f}%")
-
-        content.update("\n".join(lines))
-
-
-class TokenPanel(Static):
-    """Panel showing token usage."""
-
-    def __init__(self, stats: ClaudeStats | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.stats = stats
-
-    def compose(self) -> ComposeResult:
-        yield Static("🔢 TOKEN USAGE", classes="panel-title")
-        yield Static(id="token-content")
-
-    def update_stats(self, stats: ClaudeStats) -> None:
-        self.stats = stats
-        content = self.query_one("#token-content", Static)
-
-        lines = []
-        lines.append(f"[bold]Input:[/]  {format_tokens(stats.total_input_tokens)}")
-        lines.append(f"[bold]Output:[/] {format_tokens(stats.total_output_tokens)}")
-        lines.append(f"[bold]Total:[/]  {format_tokens(stats.total_tokens)}")
-        lines.append("")
-        lines.append(f"[dim]Cache Read:[/]  {format_tokens(stats.total_cache_read_tokens)}")
-        lines.append(f"[dim]Cache Write:[/] {format_tokens(stats.total_cache_write_tokens)}")
-        lines.append("")
-
-        # Model breakdown
-        lines.append("[bold]By Model:[/]")
-        for usage in sorted(stats.model_usage.values(), key=lambda x: -x.output_tokens):
-            if usage.output_tokens > 0:
-                lines.append(f"  {usage.display_name}: {format_tokens(usage.output_tokens)}")
-
-        content.update("\n".join(lines))
-
-
-class ActivityPanel(Static):
-    """Panel showing activity summary."""
-
-    def __init__(self, stats: ClaudeStats | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.stats = stats
-
-    def compose(self) -> ComposeResult:
-        yield Static("📊 ACTIVITY", classes="panel-title")
-        yield Static(id="activity-content")
-
-    def update_stats(self, stats: ClaudeStats) -> None:
-        self.stats = stats
-        content = self.query_one("#activity-content", Static)
-
-        # Get latest vs today
-        latest = stats.latest_activity
-        today = stats.today_activity
-
-        lines = []
-
-        # Today/Latest stats
-        if today:
-            lines.append(f"[bold green]Today:[/]")
-            lines.append(f"  Messages: {today.messages:,}")
-            lines.append(f"  Sessions: {today.sessions}")
-            lines.append(f"  Tools: {today.tool_calls:,}")
-        elif latest:
-            lines.append(f"[bold yellow]Latest ({latest.date}):[/]")
-            lines.append(f"  Messages: {latest.messages:,}")
-            lines.append(f"  Sessions: {latest.sessions}")
-            lines.append(f"  Tools: {latest.tool_calls:,}")
-        else:
-            lines.append("[dim]No activity data[/]")
-
-        lines.append("")
-
-        # Peak day
-        if peak := stats.peak_day:
-            lines.append(f"[bold magenta]Peak Day:[/] {peak.date}")
-            lines.append(f"  {peak.messages:,} messages")
-
-        # Trend
-        trend_icons = {"increasing": "📈", "decreasing": "📉", "stable": "➡️"}
-        trend = stats.usage_trend
-        if trend in trend_icons:
-            lines.append(f"\n[bold]Trend:[/] {trend_icons[trend]} {trend.title()}")
-
-        content.update("\n".join(lines))
-
-
-class SessionPanel(Static):
-    """Panel showing session info."""
-
-    def __init__(self, stats: ClaudeStats | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.stats = stats
-
-    def compose(self) -> ComposeResult:
-        yield Static("⏱️ SESSIONS", classes="panel-title")
-        yield Static(id="session-content")
-
-    def update_stats(self, stats: ClaudeStats) -> None:
-        self.stats = stats
-        content = self.query_one("#session-content", Static)
-
-        lines = []
-        lines.append(f"[bold]Total:[/] {stats.total_sessions}")
-        lines.append(f"[bold]Active Days:[/] {stats.active_days}")
-        lines.append(f"[dim]Avg/Day:[/] {stats.avg_sessions_per_day:.1f}")
-        lines.append("")
-
-        if longest := stats.longest_session:
-            lines.append(f"[bold cyan]Longest Session:[/]")
-            lines.append(f"  Duration: {longest.duration_str}")
-            lines.append(f"  Messages: {longest.message_count}")
-            lines.append(f"  Date: {longest.timestamp.date()}")
-
-        lines.append("")
-        lines.append(f"[dim]Since: {stats.first_session_date}[/]")
-        lines.append(f"[dim]({stats.days_since_start} days ago)[/]")
-
-        content.update("\n".join(lines))
-
-
-class HourlyPanel(Static):
-    """Panel showing hourly activity distribution."""
-
-    def __init__(self, stats: ClaudeStats | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.stats = stats
-
-    def compose(self) -> ComposeResult:
-        yield Static("🕐 HOURLY ACTIVITY", classes="panel-title")
-        yield Static(id="hourly-content")
-
-    def update_stats(self, stats: ClaudeStats) -> None:
-        self.stats = stats
-        content = self.query_one("#hourly-content", Static)
-
-        hours, counts = stats.get_hour_series()
-        max_count = max(counts) if counts else 1
-
-        # Build sparkline-style display
-        blocks = " ▁▂▃▄▅▆▇█"
-        line = ""
-        for h, count in zip(hours, counts):
-            level = int((count / max_count) * 8) if max_count > 0 else 0
-            char = blocks[level]
-            # Color by time
-            if 6 <= h < 12:
-                line += f"[yellow]{char}[/]"
-            elif 12 <= h < 18:
-                line += f"[green]{char}[/]"
-            elif 18 <= h < 22:
-                line += f"[cyan]{char}[/]"
-            else:
-                line += f"[magenta]{char}[/]"
-
-        lines = []
-        lines.append(line)
-        lines.append("[dim]0    6    12   18   23[/]")
-        lines.append("")
-
-        # Time of day breakdown
-        tod = stats.activity_by_time_of_day
-        total = sum(tod.values()) or 1
-        lines.append(f"[yellow]Morning:[/] {tod['morning']} ({tod['morning']*100//total}%)")
-        lines.append(f"[green]Afternoon:[/] {tod['afternoon']} ({tod['afternoon']*100//total}%)")
-        lines.append(f"[cyan]Evening:[/] {tod['evening']} ({tod['evening']*100//total}%)")
-        lines.append(f"[magenta]Night:[/] {tod['night']} ({tod['night']*100//total}%)")
-
-        if peak := stats.peak_hour:
-            lines.append(f"\n[bold]Peak Hour:[/] {peak}:00")
-
-        content.update("\n".join(lines))
-
-
-class MessagesChart(PlotextPlot):
-    """Chart showing daily message counts."""
-
-    def __init__(self, stats: ClaudeStats | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.stats = stats
-
-    def on_mount(self) -> None:
-        if self.stats:
-            self.update_chart(self.stats)
-
-    def update_chart(self, stats: ClaudeStats) -> None:
-        self.stats = stats
-        plt = self.plt
-        plt.clear_figure()
-        plt.theme("dark")
-
-        dates, messages = stats.get_messages_series(21)
-
-        if messages:
-            plt.bar(dates, messages, color="cyan")
-            plt.title("Daily Messages (Last 21 Days)")
-            plt.xlabel("Date")
-            plt.ylabel("Messages")
-
-        self.refresh()
-
-
-class TokensChart(PlotextPlot):
-    """Chart showing daily token usage."""
-
-    def __init__(self, stats: ClaudeStats | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.stats = stats
-
-    def on_mount(self) -> None:
-        if self.stats:
-            self.update_chart(self.stats)
-
-    def update_chart(self, stats: ClaudeStats) -> None:
-        self.stats = stats
-        plt = self.plt
-        plt.clear_figure()
-        plt.theme("dark")
-
-        dates, tokens = stats.get_tokens_series(21)
-        # Convert to K for readability
-        tokens_k = [t / 1000 for t in tokens]
-
-        if tokens_k:
-            plt.bar(dates, tokens_k, color="green")
-            plt.title("Daily Tokens (Last 21 Days)")
-            plt.xlabel("Date")
-            plt.ylabel("Tokens (K)")
-
-        self.refresh()
-
-
-class ModelChart(PlotextPlot):
-    """Chart showing model distribution."""
-
-    def __init__(self, stats: ClaudeStats | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.stats = stats
-
-    def on_mount(self) -> None:
-        if self.stats:
-            self.update_chart(self.stats)
-
-    def update_chart(self, stats: ClaudeStats) -> None:
-        self.stats = stats
-        plt = self.plt
-        plt.clear_figure()
-        plt.theme("dark")
-
-        dist = stats.get_model_distribution()
-        # Filter out zero values
-        dist = {k: v for k, v in dist.items() if v > 0}
-
-        if dist:
-            names = list(dist.keys())
-            values = [v / 1_000_000 for v in dist.values()]  # Convert to M
-
-            plt.bar(names, values, color="magenta")
-            plt.title("Output Tokens by Model (M)")
-
-        self.refresh()
-
-
 class HeaderWidget(Static):
-    """Custom header with live clock."""
+    """Header with title and live clock."""
 
     def compose(self) -> ComposeResult:
         yield Static(id="header-content")
@@ -390,8 +52,7 @@ class HeaderWidget(Static):
         now = datetime.now().strftime("%H:%M:%S")
         content = self.query_one("#header-content", Static)
         content.update(
-            f"[bold white on blue] ⚡ CLAUDE CODE MISSION CONTROL [/]"
-            f"[bold white on dark_blue]  {now}  [/]"
+            f"[bold]⚡ CLAUDE CODE MISSION CONTROL[/]  [dim]│[/]  [bold]{now}[/]"
         )
 
 
@@ -403,15 +64,172 @@ class SummaryBar(Static):
 
     def update_stats(self, stats: ClaudeStats) -> None:
         parts = [
-            f"[bold]Messages:[/] [green]{stats.total_messages:,}[/]",
-            f"[bold]Sessions:[/] [cyan]{stats.total_sessions}[/]",
-            f"[bold]Tools:[/] [yellow]{stats.total_tool_calls:,}[/]",
-            f"[bold]Cost:[/] [red]{format_cost(stats.total_cost)}[/]",
-            f"[bold]Tokens:[/] [magenta]{format_tokens(stats.total_tokens)}[/]",
-            f"[bold]Saved:[/] [green]{format_cost(stats.cache_savings)}[/]",
+            f"[bold]💬[/] [green]{stats.total_messages:,}[/] msgs",
+            f"[bold]🔧[/] [yellow]{stats.total_tool_calls:,}[/] tools",
+            f"[bold]💰[/] [red]{format_cost(stats.total_cost)}[/]",
+            f"[bold]🎯[/] [cyan]{format_tokens(stats.total_tokens)}[/] tokens",
+            f"[bold]💾[/] [green]{format_cost(stats.cache_savings)}[/] saved",
+            f"[bold]📅[/] [magenta]{stats.active_days}[/] days",
         ]
         content = self.query_one("#summary-content", Static)
         content.update("  │  ".join(parts))
+
+
+class CostTokenPanel(Static):
+    """Combined cost and token metrics panel."""
+
+    def compose(self) -> ComposeResult:
+        yield Static("💰 COST & TOKENS", classes="panel-title")
+        yield Static(id="panel-content")
+
+    def update_stats(self, stats: ClaudeStats) -> None:
+        content = self.query_one("#panel-content", Static)
+
+        lines = []
+
+        # Cost section
+        lines.append(f"[bold red]${stats.total_cost:,.2f}[/] total cost")
+        lines.append(f"[dim]${stats.avg_cost_per_day:.2f}/day avg[/]")
+        lines.append("")
+
+        # Model costs
+        for name, cost in sorted(stats.cost_by_model.items(), key=lambda x: -x[1]):
+            if cost > 0.01:
+                pct = (cost / stats.total_cost * 100) if stats.total_cost > 0 else 0
+                bar_len = int(pct / 5)
+                bar = "█" * bar_len
+                lines.append(f"[cyan]{name}[/] [green]{bar}[/] {format_cost(cost)}")
+
+        lines.append("")
+        lines.append(f"[bold green]Cache savings: {format_cost(stats.cache_savings)}[/]")
+        lines.append(f"[dim]Hit rate: {stats.cache_hit_rate:.1f}%[/]")
+
+        content.update("\n".join(lines))
+
+
+class ActivityPanel(Static):
+    """Activity metrics panel."""
+
+    def compose(self) -> ComposeResult:
+        yield Static("📊 ACTIVITY", classes="panel-title")
+        yield Static(id="panel-content")
+
+    def update_stats(self, stats: ClaudeStats) -> None:
+        content = self.query_one("#panel-content", Static)
+
+        latest = stats.latest_activity
+        peak = stats.peak_day
+        longest = stats.longest_session
+
+        lines = []
+
+        # Latest day
+        if latest:
+            lines.append(f"[bold yellow]Latest ({latest.date}):[/]")
+            lines.append(f"  {latest.messages:,} msgs • {latest.sessions} sess • {latest.tool_calls:,} tools")
+
+        lines.append("")
+
+        # Peak
+        if peak:
+            lines.append(f"[bold magenta]Peak:[/] {peak.date} ({peak.messages:,} msgs)")
+
+        # Longest session
+        if longest:
+            lines.append(f"[bold cyan]Longest:[/] {longest.duration_str} ({longest.message_count} msgs)")
+
+        lines.append("")
+
+        # Trend
+        trend_icons = {"increasing": "📈 Increasing", "decreasing": "📉 Decreasing", "stable": "➡️ Stable"}
+        trend = stats.usage_trend
+        if trend in trend_icons:
+            lines.append(f"[bold]Trend:[/] {trend_icons[trend]}")
+
+        # Time of day
+        lines.append("")
+        tod = stats.activity_by_time_of_day
+        total = sum(tod.values()) or 1
+        peak_time = max(tod.keys(), key=lambda k: tod[k])
+        lines.append(f"[bold]Most active:[/] {peak_time.title()}")
+
+        content.update("\n".join(lines))
+
+
+class MessagesChart(PlotextPlot):
+    """Chart showing daily message counts."""
+
+    def update_chart(self, stats: ClaudeStats) -> None:
+        plt = self.plt
+        plt.clear_figure()
+        plt.theme("dark")
+
+        dates, messages = stats.get_messages_series(21)
+
+        if messages:
+            plt.bar(dates, messages, color="cyan", fill=True)
+            plt.title("Daily Messages")
+            plt.xlabel("Date")
+
+        self.refresh()
+
+
+class TokensChart(PlotextPlot):
+    """Chart showing daily token usage."""
+
+    def update_chart(self, stats: ClaudeStats) -> None:
+        plt = self.plt
+        plt.clear_figure()
+        plt.theme("dark")
+
+        dates, tokens = stats.get_tokens_series(21)
+        tokens_k = [t / 1000 for t in tokens]
+
+        if tokens_k:
+            plt.bar(dates, tokens_k, color="green", fill=True)
+            plt.title("Daily Tokens (K)")
+            plt.xlabel("Date")
+
+        self.refresh()
+
+
+class CostChart(PlotextPlot):
+    """Chart showing cost by model."""
+
+    def update_chart(self, stats: ClaudeStats) -> None:
+        plt = self.plt
+        plt.clear_figure()
+        plt.theme("dark")
+
+        costs = stats.cost_by_model
+        costs = {k: v for k, v in costs.items() if v > 0.01}
+
+        if costs:
+            names = list(costs.keys())
+            values = list(costs.values())
+            plt.bar(names, values, color="red", fill=True)
+            plt.title("Cost by Model ($)")
+
+        self.refresh()
+
+
+class HourlyChart(PlotextPlot):
+    """Chart showing hourly activity."""
+
+    def update_chart(self, stats: ClaudeStats) -> None:
+        plt = self.plt
+        plt.clear_figure()
+        plt.theme("dark")
+
+        hours, counts = stats.get_hour_series()
+
+        if any(counts):
+            plt.bar(hours, counts, color="magenta", fill=True)
+            plt.title("Sessions by Hour")
+            plt.xlabel("Hour")
+            plt.xticks([0, 6, 12, 18, 23])
+
+        self.refresh()
 
 
 class ClaudeStatsApp(App):
@@ -419,24 +237,25 @@ class ClaudeStatsApp(App):
 
     CSS = """
     Screen {
-        background: $surface;
+        background: $background;
     }
 
     HeaderWidget {
         dock: top;
         height: 1;
-        background: blue;
+        background: $panel;
     }
 
     #header-content {
         text-align: center;
         width: 100%;
+        color: $primary;
     }
 
     SummaryBar {
         dock: top;
         height: 1;
-        background: $surface-darken-1;
+        background: $surface;
         padding: 0 1;
     }
 
@@ -444,95 +263,54 @@ class ClaudeStatsApp(App):
         text-align: center;
     }
 
-    #main-grid {
-        layout: grid;
-        grid-size: 3 2;
-        grid-gutter: 1;
+    #main-container {
         padding: 1;
     }
 
-    .panel {
-        border: solid $primary;
+    #top-row {
+        height: 12;
+        layout: horizontal;
+    }
+
+    #middle-row {
+        height: 1fr;
+    }
+
+    #bottom-row {
+        height: 1fr;
+    }
+
+    .info-panel {
+        border: solid $primary 30%;
         padding: 0 1;
-        height: 100%;
+        background: $surface;
     }
 
     .panel-title {
         text-style: bold;
         color: $text;
-        background: $primary;
+        background: $panel;
         padding: 0 1;
-        margin-bottom: 1;
     }
 
-    CostPanel {
-        column-span: 1;
+    .chart-panel {
+        border: solid $primary 30%;
+        background: $background;
     }
 
-    TokenPanel {
-        column-span: 1;
+    PlotextPlot {
+        background: $background;
     }
-
-    ActivityPanel {
-        column-span: 1;
-    }
-
-    SessionPanel {
-        column-span: 1;
-    }
-
-    HourlyPanel {
-        column-span: 1;
-    }
-
-    #charts-container {
-        layout: grid;
-        grid-size: 3 1;
-        grid-gutter: 1;
-        padding: 0 1;
-        height: 16;
-    }
-
-    MessagesChart {
-        border: solid $secondary;
-    }
-
-    TokensChart {
-        border: solid $secondary;
-    }
-
-    ModelChart {
-        border: solid $secondary;
-    }
-
-    .stat-label {
-        color: $text-muted;
-        text-style: bold;
-    }
-
-    .stat-value {
-        text-style: bold;
-    }
-
-    .stat-sublabel {
-        color: $text-muted;
-        text-style: italic;
-    }
-
-    .green { color: green; }
-    .red { color: red; }
-    .cyan { color: cyan; }
-    .yellow { color: yellow; }
-    .magenta { color: magenta; }
 
     Footer {
-        background: $surface-darken-2;
+        background: $surface;
     }
     """
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
+        Binding("t", "toggle_theme", "Theme"),
     ]
 
     TITLE = "Claude Stats"
@@ -543,31 +321,41 @@ class ClaudeStatsApp(App):
     def __init__(self, stats_file: Path | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self.stats_file = stats_file
+        self._current_theme_name = "stats-dark"
+
+    def on_mount(self) -> None:
+        # Register all custom themes
+        for theme in THEMES.values():
+            self.register_theme(theme)
+
+        # Set initial theme
+        self.theme = "stats-dark"
+
+        self.load_stats()
+        self.set_interval(5, self.load_stats)
 
     def compose(self) -> ComposeResult:
         yield HeaderWidget()
         yield SummaryBar()
         yield Container(
-            CostPanel(classes="panel"),
-            TokenPanel(classes="panel"),
-            ActivityPanel(classes="panel"),
-            SessionPanel(classes="panel"),
-            HourlyPanel(classes="panel"),
-            Static("[dim]Loading...[/]", classes="panel", id="placeholder"),
-            id="main-grid",
-        )
-        yield Container(
-            MessagesChart(),
-            TokensChart(),
-            ModelChart(),
-            id="charts-container",
+            Horizontal(
+                CostTokenPanel(classes="info-panel"),
+                ActivityPanel(classes="info-panel"),
+                id="top-row",
+            ),
+            Horizontal(
+                MessagesChart(classes="chart-panel"),
+                TokensChart(classes="chart-panel"),
+                id="middle-row",
+            ),
+            Horizontal(
+                CostChart(classes="chart-panel"),
+                HourlyChart(classes="chart-panel"),
+                id="bottom-row",
+            ),
+            id="main-container",
         )
         yield Footer()
-
-    def on_mount(self) -> None:
-        self.load_stats()
-        # Auto-refresh every 5 seconds
-        self.set_interval(5, self.load_stats)
 
     def load_stats(self) -> None:
         try:
@@ -575,35 +363,30 @@ class ClaudeStatsApp(App):
         except FileNotFoundError:
             self.notify("Stats file not found", severity="error")
         except Exception as e:
-            self.notify(f"Error loading stats: {e}", severity="error")
+            self.notify(f"Error: {e}", severity="error")
 
     def watch_stats(self, stats: ClaudeStats | None) -> None:
         if stats is None:
             return
 
-        # Update all panels
         self.query_one(SummaryBar).update_stats(stats)
-        self.query_one(CostPanel).update_stats(stats)
-        self.query_one(TokenPanel).update_stats(stats)
+        self.query_one(CostTokenPanel).update_stats(stats)
         self.query_one(ActivityPanel).update_stats(stats)
-        self.query_one(SessionPanel).update_stats(stats)
-        self.query_one(HourlyPanel).update_stats(stats)
-
-        # Update charts
         self.query_one(MessagesChart).update_chart(stats)
         self.query_one(TokensChart).update_chart(stats)
-        self.query_one(ModelChart).update_chart(stats)
-
-        # Remove placeholder
-        try:
-            placeholder = self.query_one("#placeholder")
-            placeholder.remove()
-        except Exception:
-            pass
+        self.query_one(CostChart).update_chart(stats)
+        self.query_one(HourlyChart).update_chart(stats)
 
     def action_refresh(self) -> None:
         self.load_stats()
-        self.notify("Stats refreshed")
+        self.notify("Refreshed")
+
+    def action_toggle_theme(self) -> None:
+        next_theme = get_next_theme(self._current_theme_name)
+        self._current_theme_name = next_theme
+        self.theme = next_theme
+        display_name = THEME_DISPLAY_NAMES.get(next_theme, next_theme)
+        self.notify(f"Theme: {display_name}", timeout=1)
 
 
 def main() -> None:

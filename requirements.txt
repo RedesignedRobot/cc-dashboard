@@ -1,0 +1,11 @@
+# Core dependencies
+textual>=0.89.0
+textual-plotext>=0.2.1
+rich>=13.0.0
+humanize>=4.0.0
+
+# Development dependencies (optional)
+# pip install -e ".[dev]" to include these
+# pytest>=7.0.0
+# black>=23.0.0
+# ruff>=0.1.0
